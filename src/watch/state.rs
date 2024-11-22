@@ -20,6 +20,10 @@ use crate::{
 
 use super::{terminal_event::terminal_event_handler, InputPauseGuard, WatchEvent};
 
+const HEADING_ATTRIBUTES: Attributes = Attributes::none()
+    .with(Attribute::Bold)
+    .with(Attribute::Underlined);
+
 #[derive(PartialEq, Eq)]
 enum DoneStatus {
     DoneWithSolution(String),
@@ -177,39 +181,25 @@ impl<'a> WatchState<'a> {
             stdout.write_all(b" / ")?;
         }
 
-        if self.manual_run {
+        let mut show_key = |key, postfix| {
             stdout.queue(SetAttribute(Attribute::Bold))?;
-            stdout.write_all(b"r")?;
+            stdout.write_all(&[key])?;
             stdout.queue(ResetColor)?;
-            stdout.write_all(b":run / ")?;
+            stdout.write_all(postfix)
+        };
+
+        if self.manual_run {
+            show_key(b'r', b":run / ")?;
         }
 
         if !self.show_hint {
-            stdout.queue(SetAttribute(Attribute::Bold))?;
-            stdout.write_all(b"h")?;
-            stdout.queue(ResetColor)?;
-            stdout.write_all(b":hint / ")?;
+            show_key(b'h', b":hint / ")?;
         }
 
-        stdout.queue(SetAttribute(Attribute::Bold))?;
-        stdout.write_all(b"l")?;
-        stdout.queue(ResetColor)?;
-        stdout.write_all(b":list / ")?;
-
-        stdout.queue(SetAttribute(Attribute::Bold))?;
-        stdout.write_all(b"c")?;
-        stdout.queue(ResetColor)?;
-        stdout.write_all(b":check all / ")?;
-
-        stdout.queue(SetAttribute(Attribute::Bold))?;
-        stdout.write_all(b"x")?;
-        stdout.queue(ResetColor)?;
-        stdout.write_all(b":reset / ")?;
-
-        stdout.queue(SetAttribute(Attribute::Bold))?;
-        stdout.write_all(b"q")?;
-        stdout.queue(ResetColor)?;
-        stdout.write_all(b":quit ? ")?;
+        show_key(b'l', b":list / ")?;
+        show_key(b'c', b":check all / ")?;
+        show_key(b'x', b":reset / ")?;
+        show_key(b'q', b":quit ? ")?;
 
         stdout.flush()
     }
@@ -223,9 +213,7 @@ impl<'a> WatchState<'a> {
 
         if self.show_hint {
             stdout
-                .queue(SetAttributes(
-                    Attributes::from(Attribute::Bold).with(Attribute::Underlined),
-                ))?
+                .queue(SetAttributes(HEADING_ATTRIBUTES))?
                 .queue(SetForegroundColor(Color::Cyan))?;
             stdout.write_all(b"Hint")?;
             stdout.queue(ResetColor)?;
@@ -281,6 +269,9 @@ impl<'a> WatchState<'a> {
     }
 
     pub fn check_all_exercises(&mut self, stdout: &mut StdoutLock) -> Result<ExercisesProgress> {
+        // Ignore any input until checking all exercises is done.
+        let _input_pause_guard = InputPauseGuard::scoped_pause();
+
         if let Some(first_pending_exercise_ind) = self.app_state.check_all_exercises(stdout)? {
             // Only change exercise if the current one is done.
             if self.app_state.current_exercise().done {
